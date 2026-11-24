@@ -11,6 +11,7 @@
 #include "button_shortcut.h"
 #include "button_utils.h"
 #include "status_gpio.h"
+#include "touch_mouse.h"
 #include "utils.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
@@ -156,6 +157,19 @@ void config_valid() {
         body->sleep_on_dock = 0;
         printf("[Config] sleep_on_dock is invalid\n");
     }
+    if (body->touch_mouse > TOUCH_MOUSE_STANDBY) {
+        body->touch_mouse = TOUCH_MOUSE_OFF;
+        printf("[Config] touch_mouse is invalid\n");
+    }
+    if (body->touch_mouse_sensitivity < TOUCH_MOUSE_SENSITIVITY_MIN ||
+        body->touch_mouse_sensitivity > TOUCH_MOUSE_SENSITIVITY_MAX) {
+        body->touch_mouse_sensitivity = TOUCH_MOUSE_SENSITIVITY_DEFAULT;
+        printf("[Config] touch_mouse_sensitivity is invalid\n");
+    }
+    if (body->touch_mouse_tap > 1) {
+        body->touch_mouse_tap = 1;
+        printf("[Config] touch_mouse_tap is invalid\n");
+    }
     button_remap_valid();
     shortcut_valid();
 }
@@ -263,11 +277,22 @@ void set_config(const uint8_t *new_config, const uint16_t len) {
     gpio_on_disconnect();
 
     const uint8_t prev_sleep_on_dock = config.body.sleep_on_dock;
+    const uint8_t prev_touch_mouse = config.body.touch_mouse;
+    const uint8_t prev_touch_mouse_sensitivity = config.body.touch_mouse_sensitivity;
+    const uint8_t prev_touch_mouse_tap = config.body.touch_mouse_tap;
     const auto copy_len = len < sizeof(Config_body) ? len : sizeof(Config_body);
     memcpy(&config.body, new_config, copy_len);
     // If set from legacy tool/web UI (which only sends 24 bytes), preserve sleep_on_dock
     if (len <= 24) {
         config.body.sleep_on_dock = prev_sleep_on_dock;
+    }
+    // A tool that predates the touchpad mouse zero-pads the report, which would
+    // switch the mouse off on every save. A sensitivity of 0 is never valid, so
+    // it marks such a sender: keep the mouse settings it does not know about.
+    if (config.body.touch_mouse_sensitivity == 0) {
+        config.body.touch_mouse = prev_touch_mouse;
+        config.body.touch_mouse_sensitivity = prev_touch_mouse_sensitivity;
+        config.body.touch_mouse_tap = prev_touch_mouse_tap;
     }
     config_valid();
 

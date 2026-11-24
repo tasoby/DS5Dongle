@@ -26,6 +26,7 @@ enum ShortcutAction : uint8_t {
     ShortcutActionKeyboard = 0,
     ShortcutActionBtDisconnect,
     ShortcutActionConsumer,
+    ShortcutActionTouchMouseToggle, // Switch the touchpad mouse mode on/off
 };
 
 struct __attribute__((packed)) ButtonShortcut {

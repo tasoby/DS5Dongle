@@ -293,7 +293,7 @@ Actions:
 
 - **Keyboard** — modifiers plus one key, such as `Win+Shift+S`, `Win+PrintScreen`, `Win+G`, or `F13`. Raw HID usage IDs such as `0x16` are also accepted.
 - **Media** — `VolumeUp`, `VolumeDown`, `Mute`, `PlayPause`, `Next`, `Prev`, `Stop`, `BrightnessUp`, or `BrightnessDown`. These use the Consumer Control HID interface and take no modifiers.
-- **Firmware** — `bt_disconnect` disconnects the currently connected controller.
+- **Firmware** — `bt_disconnect` disconnects the currently connected controller; `touch_mouse_toggle` switches the [touchpad mouse](#touchpad-mouse-optional) on or off.
 
 Set `enable_keyboard=1` and reconnect USB to enable keyboard and media actions. Firmware
 actions do not require the USB HID interfaces.
@@ -303,6 +303,19 @@ Limitations:
 - Trigger buttons are **not swallowed**. They still reach the game, so a chord using **PS** may also open the Steam overlay or Game Bar. Prefer buttons without a global binding.
 - Two DPad directions cannot form a chord because the controller reports only one DPad direction at a time; the tool rejects such pairs.
 - Due to a Windows limitation, volume actions adjust the DualSense audio endpoint only; they cannot adjust the currently selected default audio device.
+
+## Touchpad mouse (optional)
+
+Set `touch_mouse=1` and reconnect USB to use the DualSense touchpad as a USB mouse on the host: move, click, tap,
+right-click with two fingers and two-finger scrolling, without any software on the PC. A `touch_mouse_toggle` shortcut
+action switches the mouse mode from the controller, and the touchpad is hidden from games while it drives the mouse.
+
+```sh
+python tools/config_tool.py set touch_mouse=1
+python tools/config_tool.py shortcut "7=PS+Pad:touch_mouse_toggle"
+```
+
+See [docs/touchpad-mouse.md](docs/touchpad-mouse.md) for the gestures and settings.
 
 ## Wake-on-PS (optional)
 

@@ -11,6 +11,11 @@ extern bool usb_keyboard_only;
 extern bool usb_sleep_mode;
 extern bool usb_reconfiguring;
 uint8_t usb_keyboard_instance();
+// HID instance of the touchpad mouse. It is fixed because the mouse always comes
+// with the keyboard (1) and consumer (2) interfaces; see tud_descriptor_configuration_cb.
+constexpr uint8_t USB_TOUCH_MOUSE_INSTANCE = 3;
+// True while the configuration the host enumerated includes the mouse interface.
+extern bool usb_touch_mouse_present;
 void usb_reconnect(bool keyboard_only);
 void usb_reconnect_sleep();
 

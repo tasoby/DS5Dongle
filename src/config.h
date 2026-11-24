@@ -40,6 +40,9 @@ struct __attribute__((packed)) Config_body {
     uint8_t packet_mode; // 0: double packet(default), 1: single packet
     uint8_t disconnect_on_dock; // bool: 0 disable(default), 1 enable
     uint8_t sleep_on_dock; // bool: 0 disable(default), 1 enable (suspend host PC on dock)
+    uint8_t touch_mouse; // 0: off(default), 1: touchpad drives a USB mouse, 2: mouse off until toggled by shortcut
+    uint8_t touch_mouse_sensitivity; // [1,50] pointer speed, 10: default, 20: twice as fast
+    uint8_t touch_mouse_tap; // bool: tapping the touchpad clicks (default 1)
 };
 
 static_assert(sizeof(Config_body) + 1 <= 63); // 0xF6 funcid + body

@@ -19,6 +19,8 @@ bool usb_keyboard_only = false;
 bool usb_sleep_mode = false;
 // True from deliberate USB disconnect until remount, preventing reports to stale HID interfaces.
 bool usb_reconfiguring = false;
+// Set when the configuration descriptor is served; a config change alone does not add the interface.
+bool usb_touch_mouse_present = false;
 
 uint8_t usb_keyboard_instance() { return usb_keyboard_only ? 0 : 1; }
 

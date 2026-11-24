@@ -27,6 +27,7 @@
 #include "tusb.h"
 #include "config.h"
 #include "usb_descriptors.h"
+#include "touch_mouse.h"
 #include "usb.h"
 
 #ifndef ENABLE_SERIAL
@@ -52,6 +53,7 @@ enum {
 #ifdef ENABLE_WAKE_HID
     ITF_NUM_HID_KBD,
     ITF_NUM_HID_CONSUMER,
+    ITF_NUM_HID_MOUSE,
 #endif
     ITF_NUM_TOTAL,
 
@@ -62,7 +64,7 @@ enum {
         0,
 #endif
     CONFIG_DESC_LEN_BASE = 0x00E3 + CONFIG_DESC_LEN_AUDIO_IAD,
-    // Keyboard and Consumer Control interfaces add 25 bytes each:
+    // Keyboard, Consumer Control and Mouse interfaces add 25 bytes each:
     //   9 (interface) + 9 (HID class) + 7 (EP IN) = 25
     CONFIG_DESC_LEN_KBD_HID =
 #ifdef ENABLE_WAKE_HID
@@ -76,8 +78,14 @@ enum {
 #else
         0,
 #endif
-    CONFIG_DESC_LEN_SHORTCUT_HID = CONFIG_DESC_LEN_KBD_HID + CONFIG_DESC_LEN_CONSUMER_HID,
-    CONFIG_DESC_LEN_TOTAL = CONFIG_DESC_LEN_BASE + CONFIG_DESC_LEN_SHORTCUT_HID
+    CONFIG_DESC_LEN_MOUSE_HID =
+#ifdef ENABLE_WAKE_HID
+        25,
+#else
+        0,
+#endif
+    CONFIG_DESC_LEN_TOTAL = CONFIG_DESC_LEN_BASE + CONFIG_DESC_LEN_KBD_HID +
+                            CONFIG_DESC_LEN_CONSUMER_HID + CONFIG_DESC_LEN_MOUSE_HID
 #if ENABLE_SERIAL
         + TUD_CDC_DESC_LEN
 #endif
@@ -456,6 +464,10 @@ uint8_t descriptor_configuration[] = {
     0x03, // bmAttributes: Interrupt
     0x08, 0x00, // wMaxPacketSize: 8 (2-byte usage, padded)
     0x0A, // bInterval: 10ms
+
+    // --- INTERFACE DESCRIPTOR (HID Mouse, driven by the touchpad) ---
+    // Not a boot device. EP IN 0x89, polled every 1ms; 61 is sizeof desc_hid_report_mouse.
+    TUD_HID_DESCRIPTOR(ITF_NUM_HID_MOUSE, 0, HID_ITF_PROTOCOL_NONE, 61, 0x89, 8, 1),
 #endif
 };
 
@@ -544,19 +556,29 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     // wake or keyboard shortcuts are on; include the consumer interface only when keyboard
     // shortcuts are on (wake alone only needs the boot keyboard, and sleep_on_dock uses
     // descriptor_keyboard_sleep transiently so System Control is never exposed while gaming).
+    // The optional interfaces sit at the end and are cut off from the back, so the
+    // touchpad mouse brings the keyboard and consumer interfaces along. That keeps
+    // every HID instance number fixed: gamepad 0, keyboard 1, consumer 2, mouse 3.
     const bool wake = get_config().enable_wake;
-    const bool consumer = get_config().enable_keyboard;
+    const bool mouse = get_config().touch_mouse != TOUCH_MOUSE_OFF;
+    const bool consumer = get_config().enable_keyboard || mouse;
     const bool kbd = wake || consumer;
     descriptor_configuration[7] = wake ? 0xE0 : 0xC0; // bmAttributes (REMOTE_WAKEUP bit)
     uint16_t total = CONFIG_DESC_LEN_TOTAL;
     uint8_t num_itf = ITF_NUM_TOTAL;
-    if (!kbd) {
-        total = (uint16_t) (CONFIG_DESC_LEN_TOTAL - CONFIG_DESC_LEN_SHORTCUT_HID);
-        num_itf = ITF_NUM_TOTAL - 2;
-    } else if (!consumer) {
-        total = (uint16_t) (CONFIG_DESC_LEN_TOTAL - CONFIG_DESC_LEN_CONSUMER_HID);
-        num_itf = ITF_NUM_TOTAL - 1;
+    if (!mouse) {
+        total -= CONFIG_DESC_LEN_MOUSE_HID;
+        num_itf -= 1;
     }
+    if (!consumer) {
+        total -= CONFIG_DESC_LEN_CONSUMER_HID;
+        num_itf -= 1;
+    }
+    if (!kbd) {
+        total -= CONFIG_DESC_LEN_KBD_HID;
+        num_itf -= 1;
+    }
+    usb_touch_mouse_present = mouse;
     descriptor_configuration[2] = (uint8_t) (total & 0xFF); // wTotalLength lo
     descriptor_configuration[3] = (uint8_t) (total >> 8);   // wTotalLength hi
     descriptor_configuration[4] = num_itf;                  // bNumInterfaces
@@ -1018,6 +1040,44 @@ uint8_t const desc_hid_report_consumer[] = {
 };
 static_assert(sizeof(desc_hid_report_consumer) == 25, "consumer report descriptor length must match wDescriptorLength in config descriptor");
 
+// 61-byte mouse report descriptor: 3 buttons, relative X/Y, wheel and horizontal
+// pan. The 5-byte report has the layout of TinyUSB's hid_mouse_report_t.
+uint8_t const desc_hid_report_mouse[] = {
+    0x05, 0x01,       // Usage Page (Generic Desktop)
+    0x09, 0x02,       // Usage (Mouse)
+    0xA1, 0x01,       // Collection (Application)
+    0x09, 0x01,       //   Usage (Pointer)
+    0xA1, 0x00,       //   Collection (Physical)
+    0x05, 0x09,       //     Usage Page (Button)
+    0x19, 0x01,       //     Usage Minimum (Button 1)
+    0x29, 0x03,       //     Usage Maximum (Button 3)
+    0x15, 0x00,       //     Logical Minimum (0)
+    0x25, 0x01,       //     Logical Maximum (1)
+    0x95, 0x03,       //     Report Count (3)
+    0x75, 0x01,       //     Report Size (1)
+    0x81, 0x02,       //     Input (Data,Var,Abs)
+    0x95, 0x01,       //     Report Count (1)
+    0x75, 0x05,       //     Report Size (5)
+    0x81, 0x01,       //     Input (Const) -- pad the button byte
+    0x05, 0x01,       //     Usage Page (Generic Desktop)
+    0x09, 0x30,       //     Usage (X)
+    0x09, 0x31,       //     Usage (Y)
+    0x09, 0x38,       //     Usage (Wheel)
+    0x15, 0x81,       //     Logical Minimum (-127)
+    0x25, 0x7F,       //     Logical Maximum (127)
+    0x75, 0x08,       //     Report Size (8)
+    0x95, 0x03,       //     Report Count (3)
+    0x81, 0x06,       //     Input (Data,Var,Rel)
+    0x05, 0x0C,       //     Usage Page (Consumer)
+    0x0A, 0x38, 0x02, //     Usage (AC Pan)
+    0x95, 0x01,       //     Report Count (1)
+    0x81, 0x06,       //     Input (Data,Var,Rel)
+    0xC0,             //   End Collection
+    0xC0              // End Collection
+};
+static_assert(sizeof(desc_hid_report_mouse) == 61, "mouse report descriptor length must match the config descriptor");
+static_assert(sizeof(hid_mouse_report_t) == 5, "desc_hid_report_mouse describes hid_mouse_report_t");
+
 // 31-byte System Control report descriptor (Report ID 2: Power Down / Sleep / Wake Up).
 // Exposed only transiently in descriptor_keyboard_sleep when sleep_on_dock triggers.
 uint8_t const desc_hid_report_system_control[] = {
@@ -1047,12 +1107,13 @@ static_assert(sizeof(desc_hid_report_system_control) == 31, "system control repo
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 #ifdef ENABLE_WAKE_HID
     // Keyboard-only mode exposes HID instance 0 (and instance 1 for System Control during sleep_on_dock).
-    // Composite mode uses instance 0 (gamepad), 1 (keyboard), and 2 (consumer).
+    // Composite mode uses instance 0 (gamepad), 1 (keyboard), 2 (consumer), and 3 (mouse).
     if (itf == usb_keyboard_instance()) return desc_hid_report_kbd;
     if (usb_keyboard_only) {
         return (usb_sleep_mode && itf == 1) ? desc_hid_report_system_control : nullptr;
     }
     if (itf == 2) return desc_hid_report_consumer;
+    if (itf == USB_TOUCH_MOUSE_INSTANCE) return desc_hid_report_mouse;
 #endif
     return itf == 0 ? (ds_mode() ? desc_hid_report_ds : desc_hid_report_dse) : nullptr;
 }

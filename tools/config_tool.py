@@ -32,6 +32,8 @@ Examples:
   python config_tool.py shortcut 2=L3+R3:VolumeUp
   python config_tool.py shortcut 3=Create+Options:bt_disconnect
   python config_tool.py shortcut 6=Create+Options*2:bt_disconnect
+  python config_tool.py set touch_mouse=1
+  python config_tool.py shortcut 7=Home+Pad:touch_mouse_toggle
   python config_tool.py shortcut 9=Mute*2:Play
   python config_tool.py shortcut 1=off
   python config_tool.py fields
@@ -123,6 +125,19 @@ SHORTCUT_FLAG_MASK = SHORTCUT_FLAG_DOUBLE_TAP | SHORTCUT_FLAG_HOLD | SHORTCUT_FL
 SHORTCUT_ACTION_KEYBOARD = 0
 SHORTCUT_ACTION_BT_DISCONNECT = 1
 SHORTCUT_ACTION_CONSUMER = 2
+SHORTCUT_ACTION_TOUCH_MOUSE_TOGGLE = 3
+# Firmware actions take no payload. Keys are normalized output names; the first
+# name listed for an action is the one echoed back.
+FIRMWARE_ACTIONS = {
+    "btdisconnect": SHORTCUT_ACTION_BT_DISCONNECT,
+    "disconnect": SHORTCUT_ACTION_BT_DISCONNECT,
+    "touchmousetoggle": SHORTCUT_ACTION_TOUCH_MOUSE_TOGGLE,
+    "mousetoggle": SHORTCUT_ACTION_TOUCH_MOUSE_TOGGLE,
+}
+FIRMWARE_ACTION_NAMES = {
+    SHORTCUT_ACTION_BT_DISCONNECT: "bt_disconnect",
+    SHORTCUT_ACTION_TOUCH_MOUSE_TOGGLE: "touch_mouse_toggle",
+}
 DPAD_MAX = 7               # DPadNorthWest; the hat reports one direction at a time
 KEY_USAGE_MAX = 0x73       # src/usb_descriptors.h SHORTCUT_KEY_USAGE_MAX
 CONSUMER_USAGE_MAX = 0x2FF # src/usb_descriptors.h SHORTCUT_CONSUMER_USAGE_MAX
@@ -252,6 +267,9 @@ FIELDS = [
     ("packet_mode",        "u8",    lambda v: v in (0, 1),       "0:double packet 1:single packet"),
     ("disconnect_on_dock", "u8",    lambda v: v in (0, 1),       "0/1 (drop the BT link while the controller sits on a charger/dock)"),
     ("sleep_on_dock",      "u8",    lambda v: v in (0, 1),       "0/1 (suspend host PC when the controller sits on a dock)"),
+    ("touch_mouse",        "u8",    lambda v: v in (0, 1, 2),    "0:off 1:touchpad drives a USB mouse 2:mouse off until toggled by shortcut"),
+    ("touch_mouse_sensitivity", "u8", lambda v: 0 <= v <= 50,    "[1, 50] pointer speed (10: default, 20: twice as fast); 0 keeps the stored mouse settings"),
+    ("touch_mouse_tap",    "u8",    lambda v: v in (0, 1),       "0/1 (tapping the touchpad clicks)"),
 ]
 FIELD_NAMES = [f[0] for f in FIELDS]
 # Little-endian, no padding -- matches __attribute__((packed)) Config_body.
@@ -657,7 +675,7 @@ def shortcut_slot_valid(shortcut):
     if action == SHORTCUT_ACTION_CONSUMER:
         usage = payload[0] | (payload[1] << 8)
         return 0 < usage <= CONSUMER_USAGE_MAX
-    return action == SHORTCUT_ACTION_BT_DISCONNECT
+    return action in FIRMWARE_ACTION_NAMES
 
 
 def print_shortcuts(button, indent="  "):
@@ -679,8 +697,8 @@ def print_shortcuts(button, indent="  "):
             triggers += "@modifier_hold"
         elif flags & SHORTCUT_FLAG_HOLD:
             triggers += "@hold"
-        if action == SHORTCUT_ACTION_BT_DISCONNECT:
-            output = "bt_disconnect"
+        if action in FIRMWARE_ACTION_NAMES:
+            output = FIRMWARE_ACTION_NAMES[action]
         elif action == SHORTCUT_ACTION_CONSUMER:
             output = consumer_name(payload[0] | (payload[1] << 8))
         else:
@@ -762,11 +780,11 @@ def parse_shortcut_assignment(token):
         sys.exit("A shortcut needs one button (tap trigger) or two buttons (chord).")
 
     action_name = normalize_button_name(output_raw)
-    if mode and (action_name in CONSUMER_NAMES or action_name in ("btdisconnect", "disconnect")):
+    if mode and (action_name in CONSUMER_NAMES or action_name in FIRMWARE_ACTIONS):
         sys.exit(f"@{mode} supports keyboard keys and keyboard shortcuts only.")
-    if action_name in ("btdisconnect", "disconnect"):
+    if action_name in FIRMWARE_ACTIONS:
         return slot, (trigger_ids[0], trigger_ids[1],
-                      SHORTCUT_ACTION_BT_DISCONNECT, [0] * SHORTCUT_PAYLOAD_SIZE, flags)
+                      FIRMWARE_ACTIONS[action_name], [0] * SHORTCUT_PAYLOAD_SIZE, flags)
     if action_name in CONSUMER_NAMES:
         # Consumer usages are standalone; the HID consumer report carries no modifiers.
         usage = CONSUMER_NAMES[action_name]

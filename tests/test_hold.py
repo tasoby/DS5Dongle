@@ -34,7 +34,7 @@ class HoldTests(unittest.TestCase):
                 shutil.copyfile(ROOT / 'src' / name, tmp / name)
             (tmp / 'pico').mkdir()
             for name in ('bt.h', 'button_utils.h', 'config.h', 'utils.h', 'usb.h',
-                         'tusb.h', 'wake.h', 'pico/time.h'):
+                         'tusb.h', 'wake.h', 'touch_mouse.h', 'pico/time.h'):
                 (tmp / name).write_text('#include "platform.h"\n')
             (tmp / 'platform.h').write_text('''#pragma once
 #include <cstdint>
@@ -55,6 +55,7 @@ struct Button { ButtonShortcut shortcuts[BUTTON_SHORTCUT_COUNT]{}; };
 inline Button config;
 inline Button& get_button() { return config; }
 inline bool bt_disconnect() { return true; }
+inline bool touch_mouse_toggle() { return true; }
 inline bool usb_keyboard_only = false, usb_reconfiguring = false;
 inline bool usb_sleep_mode = false;
 inline void usb_reconnect_sleep() {}

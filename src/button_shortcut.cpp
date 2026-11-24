@@ -6,6 +6,7 @@
 #include "bt.h"
 #include "button_utils.h"
 #include "config.h"
+#include "touch_mouse.h"
 #include "tusb.h"
 #include "pico/time.h"
 #include "utils.h"
@@ -47,6 +48,7 @@ bool shortcut_slot_valid(const ButtonShortcut &shortcut) {
             return shortcut.consumer.usage != 0 &&
                    shortcut.consumer.usage <= SHORTCUT_CONSUMER_USAGE_MAX;
         case ShortcutActionBtDisconnect:
+        case ShortcutActionTouchMouseToggle:
             return true;
     }
     return false;
@@ -386,6 +388,9 @@ static void dispatch_pending() {
                 break;
             case ShortcutActionBtDisconnect:
                 handled = bt_disconnect();
+                break;
+            case ShortcutActionTouchMouseToggle:
+                handled = touch_mouse_toggle();
                 break;
         }
         if (handled) {
