@@ -56,6 +56,14 @@ inline Button config;
 inline Button& get_button() { return config; }
 inline bool bt_disconnect() { return true; }
 inline bool usb_keyboard_only = false, usb_reconfiguring = false;
+inline bool usb_sleep_mode = false;
+inline void usb_reconnect_sleep() {}
+inline void tud_disconnect() {}
+inline bool is_nil_time(absolute_time_t t) { return t == nil_time; }
+inline bool bt_is_connected() { return true; }
+struct Config_body { uint8_t enable_wake = 0; };
+inline Config_body config_body;
+inline Config_body& get_config() { return config_body; }
 inline bool ready = true, accept = true, mounted = true, suspended = false;
 inline bool tud_mounted() { return mounted; }
 inline bool tud_suspended() { return suspended; }
